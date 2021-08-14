@@ -31,7 +31,8 @@ mongoose.connect('mongodb://localhost:27017/userDB', { useNewUrlParser: true, us
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId:String
+    googleId:String,
+    secret_sauce: [String]
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -63,7 +64,7 @@ passport.use(new GoogleStrategy({
     callbackURL: "http://localhost:8000/auth/google/secrets",
   },
   function(accessToken, refreshToken, profile, cb) {
-      console.log(profile);
+      
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -80,6 +81,7 @@ app.get('/auth/google/secrets',
   passport.authenticate('google', { failureRedirect: '/login' }),
   function(req, res) {
     // Successful authentication, redirect home.
+    
     res.redirect('/secrets');
   });
 
@@ -92,26 +94,72 @@ app.get('/register', (req, res) => {
 
 app.get('/secrets', (req, res) => {
     if (req.isAuthenticated()) {
-        console.log('i am authenticated');
-        res.render('secrets');
+        
+        User.find({secret_sauce:{$ne:null}},(err,foundUsers)=>{
+            if(err)
+            {
+                res.send('err');
+            }
+            else if(foundUsers){
+                
+                res.render('secrets',{foundUsers});
+            }
+            else{
+                res.send('There are still no secrets');
+            }
+        })
     }
     else {
-        console.log('you are not authenticated');
+        
         res.redirect('/login');
     }
-})
+});
+
+app.get('/submit',(req,res)=>{
+    if(req.isAuthenticated()){
+        
+        res.render('submit');
+    }
+    else{
+        res.redirect('/login');
+    }
+});
+
+app.post('/submit',(req,res)=>{
+    User.findById(req.user._id,(err,foundUser)=>{
+        if(err){
+            
+            res.send(err);
+        }
+        else if(foundUser){
+            foundUser.secret_sauce.push(req.body.secret);
+            foundUser.save((err)=>{
+                if(err){
+                    res.send(err);
+                }
+                else{
+                    
+                    res.redirect('/secrets');
+                }
+            })
+        }
+        else{
+            res.send('please login or register');
+        }
+    })
+});
 
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
     User.register({ username: username, active: true }, password, function (err, user) {
         if (err) {
-            console.log(err);
+           
             res.redirect('/register');
         }
         else {
-            console.log('here i am');
+           
             passport.authenticate('local')(req, res, function () {
-                console.log('authenticated');
+               
                 res.redirect('/secrets');
             });
         }
